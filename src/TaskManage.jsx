@@ -11,13 +11,20 @@ function TaskManage({session}) {
     
     async  function  handleSubmit(e){
         e.preventDefault()
-       let {data,error} = await supabase.from("tasks").insert({...newTask, email:session.user.email}).select().single()
+  
+
+        let imageUrl = null;
+
+if (taskImage) {
+  imageUrl = await uploadImageToBucket(taskImage);
+}
+     let {data,error} = await supabase.from("tasks").insert({...newTask, email:session.user.email, image_url:imageUrl}).select().single()
         // .insert  me multiple objects hum desakte hai.
     
         if(data){
           setNewTask({title:"", description:""})
         }
-    
+
     
       }
     
@@ -36,8 +43,6 @@ function TaskManage({session}) {
       useEffect(()=>{
     fetchTasks()
       },[])
-
-
 
       useEffect(() => {
   const myChannel = supabase.channel('tasks-channel')
@@ -61,24 +66,51 @@ function TaskManage({session}) {
 
  
     
-useEffect(() => {
-  const channel = supabase.channel('tasks-channel')
-    .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'tasks' },
-        (payload) => {
-          console.log("New task inserted:", payload.new);  
-          setTasks(prev => [...prev, payload.new]); // add new task to state
-        }
-    )
-    .subscribe(status => console.log('Channel status:', status));
+// useEffect(() => {
+//   const channel = supabase.channel('tasks-channel')
+//     .on('postgres_changes', 
+//         { event: 'INSERT', schema: 'public', table: 'tasks' },
+//         (payload) => {
+//           console.log("New task inserted:", payload.new);  
+//           setTasks(prev => [...prev, payload.new]); // add new task to state
+//         }
+//     )
+//     .subscribe(status => console.log('Channel status:', status));
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
+//   return () => {
+//     supabase.removeChannel(channel);
+//   };
+// }, []);
 
     
-      function handleFileChange(){
+      const uploadImageToBucket = async (file) => {
+  const filePath = `${file.name}-${Date.now()}`;
+
+  const { error } = await supabase
+    .storage
+    .from('tasks-bucket')
+    .upload(filePath, file);
+
+  if (error) {
+    console.error('Error:', error.message);
+    return null;
+  }
+
+  const { data } =   supabase
+    .storage
+    .from('tasks-bucket')
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+};
+
+
+
+
+      function handleFileChange(e){
+         if(e.target.files && e.target.files.length > 0){
+      setTaskImage(e.target.files[0])
+    }
     
       }
     
@@ -168,7 +200,7 @@ useEffect(() => {
         <div className="task-info">
           <h2>{task.title}</h2>
           <p>{task.description}</p>
-          <img src={task.image_url} alt={task.title} />
+          <img src={task.image_url} alt={task.title}  style={{width:"100px"}}/>
           <form onSubmit={(e) => handleUpdateSubmit(e, task.id)} className="task-form">
             <input  
               type="text"
